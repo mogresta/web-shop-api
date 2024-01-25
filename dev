@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+
+DOCKER_HOST_USER_ID=$(id -u)
+DOCKER_HOST_GROUP_ID=$(id -g)
+
+export DOCKER_HOST_USER_ID
+export DOCKER_HOST_GROUP_ID
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
+
+ENV_PATH="./docker/.env"
+GREEN='\033[0;32m'
+RESET='\033[0m'
+
+function getEnvVariableValue()
+{
+  if [ -f $ENV_PATH ]; then
+    declare -A ENV_ARRAY
+
+    for item in $(cat $ENV_PATH | sed 's/#.*//g' | xargs)
+    do
+      key=$(awk -F= '{print $1}' <<< $item)
+      value=$(awk -F= '{print $2}' <<< $item)
+
+      ENV_ARRAY[$key]=$value
+    done
+  fi
+
+  echo "${ENV_ARRAY[$1]}"
+}
+
+function showInfo()
+{
+    echo -e "
+        ${GREEN}Description
+        -----------
+        ${RESET}
+        To run without ./dev create alias (in .bash_rc or .bash_aliases) as ${GREEN}alias=\"./dev\"${RESET} or run with ${GREEN}bash dev${RESET}
+        ${GREEN}
+        How to use
+        ----------
+        ${RESET}
+        Start containers
+        ${GREEN}dev up${RESET}\n
+        Build and start containers (runs docker-compose --build --no-recreate -d)
+        ${GREEN}dev bup${RESET}\n
+        Stop containers
+        ${GREEN}dev down${RESET}\n
+        Enter php8 container
+        ${GREEN}dev php8${RESET}\n
+        Enter mysql container
+        ${GREEN}dev mysql${RESET}\n
+        Run composer on php8
+        ${GREEN}dev exec --user web php8 composer install${RESET}\n
+        Run CS fixer check
+        ${GREEN}dev cs${RESET}\n
+        Run CS fixer check with --fix
+        ${GREEN}dev csfix${RESET}\n
+        Clear cache
+        ${GREEN}dev c:c${RESET}\n
+        Run bin/console commands
+        ${GREEN}dev console${RESET}\n
+        "
+}
+
+if [[ -f "/usr/local/bin/docker-compose" || -f "/usr/bin/docker-compose" ]]; then
+  COMPOSE="docker-compose -f docker/docker-compose.yml"
+else
+  COMPOSE="docker compose -f docker/docker-compose.yml"
+fi
+
+if [ "$1" == "--file" ]; then
+    COMPOSE_FILE_PATH="$2"
+    if [ ! -f "$COMPOSE_FILE_PATH" ]; then
+        echo "File $COMPOSE_FILE_PATH doesn't exist"
+        exit 1
+    fi
+
+    if [[ -f "/usr/local/bin/docker-compose" || -f "/usr/bin/docker-compose" ]]; then
+      COMPOSE="docker-compose -f $COMPOSE_FILE_PATH"
+    else
+      COMPOSE="docker compose -f $COMPOSE_FILE_PATH"
+    fi
+
+    shift 2
+fi
+
+#### If we pass any arguments...
+if [ $# -gt 0 ];then
+    # If "info" is used, just output some handy information
+    if [ "$1" == "info" ]; then
+        shift 1
+        showInfo
+    # Run build
+    elif [ "$1" == "build" ]; then
+        shift 1
+        ${COMPOSE} build "$@"
+
+    # Build and start containers
+    elif [ "$1" == "bup" ]; then
+        ${COMPOSE} up --build --no-recreate -d
+
+        echo "Application is running on http://$(getEnvVariableValue APP_HOST_NAME):$(getEnvVariableValue APACHE_PORT)"
+
+    # Start containers
+    elif [ "$1" == "up" ]; then
+        shift 1
+        ${COMPOSE} up -d "$@"
+
+        echo "Application is running on http://$(getEnvVariableValue APP_HOST_NAME):$(getEnvVariableValue APACHE_PORT)"
+
+    # Shutdown containers and cleanup
+    elif [ "$1" == "down" ]; then
+        shift 1
+        ${COMPOSE} down "$@"
+
+    # Execute command on running container
+    elif [ "$1" == "exec" ]; then
+        shift 1
+        ${COMPOSE} exec "$@"
+
+    # Start container and run command
+    elif [ "$1" == "run" ]; then
+        shift 1
+        ${COMPOSE} run "$@"
+
+    # Enter inside php7 container container
+    elif [ "$1" == "php8" ]; then
+        ${COMPOSE} exec --user web php8 bash
+
+    # Enter inside msqyl container container
+    elif [ "$1" == "mysql" ]; then
+        ${COMPOSE} exec mysql bash
+
+    elif [ "$1" == "cs" ]; then
+        ${COMPOSE} run --rm php8 vendor/bin/ecs check --clear-cache
+
+    elif [ "$1" == "csfix" ]; then
+        ${COMPOSE} run --rm php8 vendor/bin/ecs check --clear-cache --fix
+
+    elif [ "$1" == "c:c" ]; then
+        ${COMPOSE} exec --user root php8 rm -rf var/cache/ && ${COMPOSE} exec php8 bin/console c:c
+
+    elif [ "$1" == "console" ]; then
+        shift 1
+        ${COMPOSE} run --rm  php8 bin/console "$@"
+
+    # Else, pass-thru args to docker-compose
+    else
+        ${COMPOSE} "$@"
+    fi
+
+else
+    # Show running containers by default
+    ${COMPOSE} ps
+fi
