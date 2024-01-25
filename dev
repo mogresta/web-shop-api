@@ -41,24 +41,28 @@ function showInfo()
         How to use
         ----------
         ${RESET}
+
         Start containers
         ${GREEN}dev up${RESET}\n
+
         Build and start containers (runs docker-compose --build --no-recreate -d)
         ${GREEN}dev bup${RESET}\n
+
         Stop containers
         ${GREEN}dev down${RESET}\n
+
         Enter php8 container
         ${GREEN}dev php8${RESET}\n
+
         Enter mysql container
         ${GREEN}dev mysql${RESET}\n
+
         Run composer on php8
         ${GREEN}dev exec --user web php8 composer install${RESET}\n
-        Run CS fixer check
-        ${GREEN}dev cs${RESET}\n
-        Run CS fixer check with --fix
-        ${GREEN}dev csfix${RESET}\n
+
         Clear cache
         ${GREEN}dev c:c${RESET}\n
+
         Run bin/console commands
         ${GREEN}dev console${RESET}\n
         "
@@ -125,19 +129,13 @@ if [ $# -gt 0 ];then
         shift 1
         ${COMPOSE} run "$@"
 
-    # Enter inside php7 container container
+    # Enter inside php8 container container
     elif [ "$1" == "php8" ]; then
         ${COMPOSE} exec --user web php8 bash
 
     # Enter inside msqyl container container
     elif [ "$1" == "mysql" ]; then
         ${COMPOSE} exec mysql bash
-
-    elif [ "$1" == "cs" ]; then
-        ${COMPOSE} run --rm php8 vendor/bin/ecs check --clear-cache
-
-    elif [ "$1" == "csfix" ]; then
-        ${COMPOSE} run --rm php8 vendor/bin/ecs check --clear-cache --fix
 
     elif [ "$1" == "c:c" ]; then
         ${COMPOSE} exec --user root php8 rm -rf var/cache/ && ${COMPOSE} exec php8 bin/console c:c
